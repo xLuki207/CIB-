@@ -1,19 +1,20 @@
-const whole = (n, digits = 0) =>
+const group = (n, digits = 0) =>
   n.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })
 
-// Monumental numbers stay short: $184,203 below a million, $1.84M above.
+// Exact dollars below a million ($21,651), two decimals above ($1.24M).
 export function money(n) {
-  if (n == null || !Number.isFinite(n)) return ' '
-  if (n >= 1e9) return `$${whole(n / 1e9, 2)}B`
-  if (n >= 1e6) return `$${whole(n / 1e6, 2)}M`
-  return `$${whole(n)}`
+  if (n == null || !Number.isFinite(n)) return null
+  if (n >= 1e9) return `$${group(n / 1e9, 2)}B`
+  if (n >= 1e6) return `$${group(n / 1e6, 2)}M`
+  return `$${group(Math.round(n))}`
 }
 
-// $0.00001196 → $0.0₄1196, the way traders read small prices. Returns HTML.
+// Four significant digits. Leading zeros collapse into a subscript: $0.0{4}2165.
+// Returns tokens for the ticker: plain characters, and { sub } for the zero count.
 export function price(n) {
-  if (n == null || !Number.isFinite(n) || n <= 0) return ' '
-  if (n >= 1) return `$${whole(n, 2)}`
-  if (n >= 0.001) return `$${whole(n, 5)}`
+  if (n == null || !Number.isFinite(n) || n <= 0) return null
+  if (n >= 1) return [...`$${group(n, 2)}`]
+  if (n >= 0.001) return [...`$${group(n, 5)}`]
   const [, zeros, digits] = n.toFixed(20).match(/^0\.(0*)(\d{4})/)
-  return `$0.0<sub>${zeros.length}</sub>${digits}`
+  return ['$', '0', '.', '0', { sub: String(zeros.length) }, ...digits]
 }

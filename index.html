@@ -4,70 +4,60 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0a0908" />
-    <title>CIB · cat in backpack</title>
-    <meta name="description" content="cat in backpack, paired with sol." />
+    <title>CIB</title>
+    <meta name="description" content="Cat in backpack. Paired with backpack." />
     <link rel="canonical" href="https://cibpack.fun/" />
     <meta property="og:url" content="https://cibpack.fun/" />
-    <meta property="og:title" content="CIB · cat in backpack" />
+    <meta property="og:title" content="CIB" />
+    <meta property="og:description" content="Cat in backpack. Paired with backpack." />
     <meta property="og:image" content="https://gateway.irys.xyz/7KvyBg44MXzyoTvsbJQCHdJ2cJSE9tyEAMBDyYqUdCt2" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" href="https://cdn.helius-rpc.com/cdn-cgi/image/width=64,format=auto/https://gateway.irys.xyz/7KvyBg44MXzyoTvsbJQCHdJ2cJSE9tyEAMBDyYqUdCt2" />
-    <link rel="preconnect" href="https://cdn.helius-rpc.com" />
+    <link rel="preload" as="image" href="https://gateway.irys.xyz/7KvyBg44MXzyoTvsbJQCHdJ2cJSE9tyEAMBDyYqUdCt2" crossorigin="anonymous" />
   </head>
   <body>
-    <main class="surface">
-      <figure class="hero" id="hero">
-        <div class="hero-drift" id="drift">
-          <img
-            id="art"
-            alt="A kitten looking out of a red backpack"
-            width="784"
-            height="1168"
-            fetchpriority="high"
-            decoding="async"
-            src="https://cdn.helius-rpc.com/cdn-cgi/image/width=784,quality=82,format=auto/https://gateway.irys.xyz/7KvyBg44MXzyoTvsbJQCHdJ2cJSE9tyEAMBDyYqUdCt2"
-            srcset="
-              https://cdn.helius-rpc.com/cdn-cgi/image/width=480,quality=82,format=auto/https://gateway.irys.xyz/7KvyBg44MXzyoTvsbJQCHdJ2cJSE9tyEAMBDyYqUdCt2 480w,
-              https://cdn.helius-rpc.com/cdn-cgi/image/width=784,quality=82,format=auto/https://gateway.irys.xyz/7KvyBg44MXzyoTvsbJQCHdJ2cJSE9tyEAMBDyYqUdCt2 784w"
-            sizes="(min-width: 960px) 520px, 100vw"
-          />
+    <div class="stage" id="stage">
+      <canvas id="scene" aria-hidden="true"></canvas>
+      <img id="still" alt="A kitten sitting in a red backpack" crossorigin="anonymous" />
+    </div>
+
+    <main class="type" id="type">
+      <header class="top">
+        <h1 class="mark">CIB <em>cat in backpack</em></h1>
+        <div class="aside">
+          <p class="clock" id="clock">&nbsp;</p>
+          <p class="hint">hold to pull it closer</p>
         </div>
-        <span class="hero-empty">CIB</span>
-      </figure>
+      </header>
 
-      <section class="copy">
-        <header class="mark rise">
-          <h1 id="symbol">CIB</h1>
-          <p>cat in backpack</p>
-        </header>
-
-        <dl class="numbers">
-          <div class="lead rise">
-            <dt>market cap</dt>
-            <dd id="mcap">&nbsp;</dd>
+      <dl class="figures">
+        <div class="cap">
+          <dt>market cap</dt>
+          <dd class="num" id="mcap"></dd>
+        </div>
+        <div class="row">
+          <div>
+            <dt>price</dt>
+            <dd class="num" id="price"></dd>
           </div>
-          <div class="pair rise">
-            <div>
-              <dt>price</dt>
-              <dd id="price">&nbsp;</dd>
-            </div>
-            <div>
-              <dt>volume 24h</dt>
-              <dd id="vol">&nbsp;</dd>
-            </div>
+          <div>
+            <dt>volume 24h</dt>
+            <dd class="num" id="vol"></dd>
           </div>
-        </dl>
+        </div>
+      </dl>
 
-        <footer class="foot rise">
-          <p>paired with sol</p>
-          <nav class="actions">
-            <button type="button" id="copy">copy ca</button>
-            <a href="https://pump.fun/coin/EN74JUrqLk4s88fwXXZPctzT8c3Dbrr3Uwa6JbNT8LDt" target="_blank" rel="noopener noreferrer">pump.fun</a>
-          </nav>
-        </footer>
-      </section>
+      <footer class="bottom">
+        <p class="pairing">paired with backpack <span id="pair">CIB / BP on LaunchLab</span></p>
+        <nav class="actions">
+          <button type="button" id="copy">copy ca</button>
+          <a href="https://raydium.io/launchpad/token/?mint=EN74JUrqLk4s88fwXXZPctzT8c3Dbrr3Uwa6JbNT8LDt" target="_blank" rel="noopener noreferrer">launchlab</a>
+          <a href="https://pump.fun/coin/EN74JUrqLk4s88fwXXZPctzT8c3Dbrr3Uwa6JbNT8LDt" target="_blank" rel="noopener noreferrer">pump.fun</a>
+        </nav>
+      </footer>
+
     </main>
-    <div class="grain" aria-hidden="true"></div>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

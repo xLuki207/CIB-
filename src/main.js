@@ -1,77 +1,100 @@
-import '@fontsource-variable/newsreader/opsz.css'
-import '@fontsource-variable/newsreader/opsz-italic.css'
+import '@fontsource-variable/bodoni-moda/opsz.css'
+import '@fontsource-variable/bodoni-moda/opsz-italic.css'
 import './style.css'
 import { money, price } from './format.js'
-import { tweenNumber } from './tween.js'
-import { liveHero, grain } from './motion.js'
+import { ticker } from './ticker.js'
+import { createScene } from './scene.js'
 
 const MINT = 'EN74JUrqLk4s88fwXXZPctzT8c3Dbrr3Uwa6JbNT8LDt'
-const POLL_MS = 10_000
+const IMAGE = 'https://gateway.irys.xyz/7KvyBg44MXzyoTvsbJQCHdJ2cJSE9tyEAMBDyYqUdCt2'
+const POLL_MS = 8000
+const STALE_MS = 30_000
+
 const $ = (id) => document.getElementById(id)
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches
+if (calm) document.body.classList.add('calm')
+
+/* ---------- Picture ---------- */
+
+const still = $('still')
+let scene = null
+
+function loadPicture(src) {
+  return new Promise((resolve) => {
+    still.onload = () => resolve(true)
+    still.onerror = () => resolve(false)
+    still.src = src
+  })
+}
+
+const pictureReady = loadPicture(IMAGE).then((ok) => {
+  if (!ok) return document.body.classList.add('no-picture')
+  try {
+    scene = createScene($('scene'), still, { calm })
+  } catch (err) {
+    console.warn('webgl unavailable, using the still', err)
+  }
+  if (scene) {
+    scene.onPull = () => document.body.classList.add('pulled')
+    scene.start()
+  } else {
+    document.body.classList.add('no-gl')
+  }
+})
+
+/* The pull: hold anywhere that is not a control. */
+const stage = document.documentElement
+stage.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0 || e.target.closest('a, button')) return
+  scene?.hold(true)
+})
+for (const ev of ['pointerup', 'pointercancel', 'blur']) addEventListener(ev, () => scene?.hold(false))
+addEventListener('contextmenu', (e) => e.target.closest('a') || e.preventDefault())
+
+/* ---------- Opening: picture unzips, then the type arrives, then stillness ---------- */
+
+Promise.race([
+  Promise.all([pictureReady, document.fonts.ready]),
+  new Promise((r) => setTimeout(r, 1800)),
+]).then(() => document.body.classList.add('in'))
+
+/* ---------- Live figures ---------- */
 
 const set = {
-  mcap: tweenNumber($('mcap'), money),
-  vol: tweenNumber($('vol'), money),
-  price: tweenNumber($('price'), price, { html: true, log: true }),
+  mcap: ticker($('mcap'), { calm }),
+  price: ticker($('price'), { calm }),
+  vol: ticker($('vol'), { calm }),
 }
 
-/* Image: Helius CDN, sized and re-encoded. Raw gateway if the CDN fails, then the wordmark. */
-const art = $('art')
-const cdn = (raw, w) => `https://cdn.helius-rpc.com/cdn-cgi/image/width=${w},quality=82,format=auto/${raw}`
-let rawImage = 'https://gateway.irys.xyz/7KvyBg44MXzyoTvsbJQCHdJ2cJSE9tyEAMBDyYqUdCt2'
+let lastGood = 0
+const clock = $('clock')
+const time = (ms) => new Date(ms).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 
-art.addEventListener('error', () => {
-  if (art.dataset.fallback) return $('hero').classList.add('empty')
-  art.dataset.fallback = '1'
-  art.removeAttribute('srcset')
-  art.src = rawImage
-})
-
-function useImage(raw) {
-  if (!raw || raw === rawImage) return
-  rawImage = raw
-  delete art.dataset.fallback
-  $('hero').classList.remove('empty')
-  art.srcset = `${cdn(raw, 480)} 480w, ${cdn(raw, 784)} 784w`
-  art.src = cdn(raw, 784)
+function mark() {
+  if (!lastGood) return
+  const fresh = Date.now() - lastGood < STALE_MS
+  clock.textContent = `${fresh ? 'live' : 'held'} ${time(lastGood)}`
+  document.body.classList.toggle('stale', !fresh)
 }
 
-/* Load: one short choreography once the hero can show, then quiet. */
-let entered = false
-const entrance = new Promise((resolve) => {
-  const go = () => {
-    if (entered) return
-    entered = true
-    document.body.classList.add('in')
-    resolve()
-  }
-  art.decode().then(go, go)
-  setTimeout(go, 1200)
-})
-
-/* Data */
-let first = true
-let failures = 0
-
+let shown = false
 function render(d) {
-  $('symbol').textContent = d.symbol
-  document.title = `${d.symbol} ${money(d.marketCap)}`
-  useImage(d.image)
+  if (d.live) lastGood = d.quotedAt
+  else lastGood ||= d.quotedAt
+  mark()
 
-  if (first) {
-    first = false
-    // Count up from zero as the numbers rise into place.
-    entrance.then(() => setTimeout(() => {
-      set.mcap(d.marketCap, { from: 0, duration: 1100, instant: calm })
-      set.vol(d.volume24h, { from: 0, duration: 1100, instant: calm })
-      set.price(d.price, { from: d.price / 40, duration: 1100, instant: calm })
-    }, calm ? 0 : 280))
-    return
+  if (d.pair) $('pair').textContent = d.source === 'dexscreener' ? d.pair : `${d.pair} on LaunchLab`
+
+  const apply = () => {
+    set.mcap(money(d.marketCap))
+    set.price(price(d.price))
+    set.vol(money(d.volume24h))
   }
-  set.mcap(d.marketCap, { instant: calm })
-  set.vol(d.volume24h, { instant: calm })
-  set.price(d.price, { instant: calm })
+  if (shown) return apply()
+  shown = true
+  // The first figures turn in just after the type has settled.
+  const wait = () => (document.body.classList.contains('in') ? setTimeout(apply, calm ? 0 : 520) : setTimeout(wait, 60))
+  wait()
 }
 
 async function refresh() {
@@ -80,29 +103,27 @@ async function refresh() {
     const data = await res.json()
     if (!res.ok) throw new Error(data.error)
     render(data)
-    failures = 0
-    document.body.classList.remove('stale')
   } catch (err) {
-    // Keep the last numbers. Only after a minute without data do they go quiet.
-    if (++failures >= 6) document.body.classList.add('stale')
-    console.warn('refresh failed:', err.message)
+    console.warn('quote failed:', err.message)
   }
+  mark()
 }
 
 let timer = 0
-const schedule = () => {
+function loop() {
   clearTimeout(timer)
   timer = setTimeout(async () => {
     if (!document.hidden) await refresh()
-    schedule()
+    loop()
   }, POLL_MS)
 }
-refresh().then(schedule)
+refresh().then(loop)
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) refresh().then(schedule)
+  if (!document.hidden) refresh().then(loop)
 })
 
-/* Actions */
+/* ---------- Actions ---------- */
+
 $('copy').addEventListener('click', async (e) => {
   const btn = e.currentTarget
   try {
@@ -122,7 +143,3 @@ $('copy').addEventListener('click', async (e) => {
     btn.classList.remove('done')
   }, 1400)
 })
-
-/* Motion */
-grain(document.querySelector('.grain'))
-if (!calm) liveHero($('hero'), $('drift'))
