@@ -1,29 +1,40 @@
-# CIB · Cat in backpack
+# CIB
 
-One page for `EN74JUrqLk4s88fwXXZPctzT8c3Dbrr3Uwa6JbNT8LDt`. Domain: cibpack.fun
+Cat in backpack, paired with backpack. Live at https://cibpack.fun
+
+## Start
 
 ```
-cp .env.example .env   # set HELIUS_API_KEY
+cp .env.example .env    # HELIUS_API_KEY=...
 npm install
-npm run dev            # http://localhost:5190
+npm run dev             # http://localhost:5190
 ```
 
-## Data
+On Vercel, set `HELIUS_API_KEY` in the project environment. `api/token.js` serves the same
+route as the dev middleware.
 
-`server/token.js` runs inside Vite as `/api/token`, so the Helius key never reaches the browser.
-The page polls it every 10 s, tweens every change, and keeps the last values if a fetch fails.
-The server also keeps the last good value per field, so one flaky source never blanks a number.
+## Live on the page
 
-- **Helius DAS `getAsset`** (`showFungible: true`): name, symbol, image
-  (`content.links.image`, then `content.files[0].uri`), supply, decimals, price.
-  Market cap = `price_per_token × supply / 10^decimals`.
-- **24h volume**: DexScreener, SOL pair with the most volume. While CIB is still on the
-  Raydium LaunchLab curve DexScreener returns no pairs, so it falls back to Jupiter
-  `tokens/v2/search` (`stats24h` buy + sell volume).
+Polled every 8 s from `/api/token`, only while the tab is visible:
 
-Helius caches `price_info` for a few minutes, so market cap can trail pump.fun a little.
+| Field | Source |
+| --- | --- |
+| Price USD | DexScreener `priceUsd` of the most liquid CIB pair |
+| Market cap USD | DexScreener `marketCap` of that pair, as served |
+| 24h volume USD | DexScreener `volume.h24` of that pair only |
+| Name, symbol, image, supply, decimals | Helius DAS `getAsset` with `showFungible: true` |
+| Pair label | base / quote of the chosen pair (CIB / BP, Backpack) |
 
-## Deploy
+Before DexScreener indexes a pair (the LaunchLab curve phase), price comes from the curve
+itself, read on chain through Helius and multiplied by BP in USD; volume is Jupiter's 24h.
+Helius `price_info` is the last resort.
 
-`api/token.js` serves the same route on Vercel. Import the repo, framework preset Vite,
-and set `HELIUS_API_KEY` in the project's environment variables.
+The page shows the time of the last good quote as `live hh:mm:ss`. If quotes fail it keeps the
+last valid figures and the stamp turns to `held`.
+
+## Code
+
+- `server/token.js` sources and fallbacks, last good quote held server side
+- `src/scene.js` WebGL picture: key light, depth, grain, the unzip opening, the pull
+- `src/ticker.js` digit reels for the figures
+- `src/format.js` `$57,666`, `$1.24M`, `$0.0₄5766`
