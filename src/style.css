@@ -141,7 +141,7 @@ dt {
 }
 .strip {
   display: block;
-  transition: transform 950ms var(--film);
+  transition: transform 600ms var(--film);
   will-change: transform;
 }
 .strip span, .glyph {

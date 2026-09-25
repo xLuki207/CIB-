@@ -7,8 +7,8 @@ import { createScene } from './scene.js'
 
 const MINT = 'EN74JUrqLk4s88fwXXZPctzT8c3Dbrr3Uwa6JbNT8LDt'
 const IMAGE = 'https://gateway.irys.xyz/7KvyBg44MXzyoTvsbJQCHdJ2cJSE9tyEAMBDyYqUdCt2'
-const POLL_MS = 8000
-const STALE_MS = 30_000
+const POLL_MS = 1000
+const STALE_MS = 10_000
 
 const $ = (id) => document.getElementById(id)
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -83,7 +83,7 @@ function render(d) {
   else lastGood ||= d.quotedAt
   mark()
 
-  if (d.pair) $('pair').textContent = d.source === 'dexscreener' ? d.pair : `${d.pair} on LaunchLab`
+  if (d.pair) $('pair').textContent = d.pair
 
   const apply = () => {
     set.mcap(money(d.marketCap))

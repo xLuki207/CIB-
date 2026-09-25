@@ -1,16 +1,20 @@
 // Server side only. The Helius key never reaches the browser.
 //
-// Price, market cap and volume come from the market, in this order:
-//   1. DexScreener, most liquid pair: priceUsd, marketCap, volume.h24 exactly as served.
-//   2. Until DexScreener indexes a pair: the Raydium LaunchLab curve read on chain through
-//      Helius (the exact spot price in BP), times BP in USD. Volume is Jupiter's 24h for CIB,
-//      which on the curve is the one and only pool.
-//   3. Helius price_info as the last resort.
+// Price moves every second, so it is read where it lives:
+//   1. The Raydium CPMM pool CIB / BP, read on chain through Helius every request:
+//      spot price = BP reserve / CIB reserve (fees owed to protocol, fund and creator excluded),
+//      times BP in USD from DexScreener. Market cap = price * total supply, as DexScreener does.
+//      24h volume = DexScreener volume.h24 of this pair.
+//   2. DexScreener alone (priceUsd, marketCap, volume.h24 as served).
+//   3. The LaunchLab curve on chain, from before migration.
+//   4. Helius price_info as the last resort.
 // Helius getAsset always supplies name, symbol, image, supply and decimals.
 
 export const MINT = 'EN74JUrqLk4s88fwXXZPctzT8c3Dbrr3Uwa6JbNT8LDt'
 export const BP = 'BPxxfRCXkUVhig4HS1Lh7kZqV6SPJhzfEk4x6fVBjPCy' // Backpack, the quote token
-const POOL = '7Z8gozgsxwmQPjVtcLKDXtdMoNtn8Mc7Bqwq8noaEkvi' // LaunchLab pool, CIB / BP
+const POOL = '7Z8gozgsxwmQPjVtcLKDXtdMoNtn8Mc7Bqwq8noaEkvi' // LaunchLab curve, CIB / BP (migrated)
+const CPMM = 'GMGmPNwtvRcRRBXp24y6UWyvqBH8L38mcRK3QbtoF8Mq' // Raydium CPMM pool, CIB / BP
+const CPMM_PROGRAM = 'CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C'
 const LAUNCHLAB = 'LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj'
 
 async function getJson(url, init) {
@@ -77,7 +81,56 @@ async function curve(apiKey) {
   return { status, priceInB, supply: Number(supply) / 10 ** decA, slot: res.context.slot }
 }
 
-async function bpUsd() {
+/* Raydium CPMM pool state (raydium-cp-swap PoolState) plus both vaults, one RPC call */
+const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+function base58(buf) {
+  let n = BigInt('0x' + buf.toString('hex'))
+  let out = ''
+  while (n > 0n) { out = B58[Number(n % 58n)] + out; n /= 58n }
+  for (const b of buf) { if (b !== 0) break; out = '1' + out }
+  return out
+}
+
+let vaults = null
+async function cpmm(apiKey) {
+  if (!vaults) {
+    const res = await rpc(apiKey, 'getAccountInfo', [CPMM, { encoding: 'base64' }])
+    const d = Buffer.from(res.value.data[0], 'base64')
+    vaults = [base58(d.subarray(72, 104)), base58(d.subarray(104, 136))]
+    const mint0 = base58(d.subarray(168, 200))
+    if (mint0 !== BP) throw new Error('unexpected pool order')
+  }
+  const res = await rpc(apiKey, 'getMultipleAccounts', [[CPMM, ...vaults], { encoding: 'base64', commitment: 'confirmed' }])
+  const [pool, v0, v1] = res.value.map((a) => a && Buffer.from(a.data[0], 'base64'))
+  if (!pool || res.value[0].owner !== CPMM_PROGRAM) throw new Error('cpmm pool missing')
+  if (pool.readUInt8(329) !== 0) throw new Error('cpmm pool paused')
+  const u64 = (b, o) => b.readBigUInt64LE(o)
+  const dec0 = pool.readUInt8(331)
+  const dec1 = pool.readUInt8(332)
+  // Reserves the curve actually trades against: vault balance minus fees owed.
+  const r0 = u64(v0, 64) - u64(pool, 341) - u64(pool, 357) - u64(pool, 397)
+  const r1 = u64(v1, 64) - u64(pool, 349) - u64(pool, 365) - u64(pool, 405)
+  const priceInBP = (Number(r0) / 10 ** dec0) / (Number(r1) / 10 ** dec1)
+  return { priceInBP, slot: res.context.slot }
+}
+
+// Slow parts of the quote change slower than the price; keep them a few seconds.
+function every(ms, fn) {
+  let at = 0
+  let value = null
+  let pending = null
+  return async () => {
+    if (value != null && Date.now() - at < ms) return value
+    pending ??= fn().then((v) => { value = v; at = Date.now(); return v }).finally(() => (pending = null))
+    try { return await pending } catch (e) { if (value != null) return value; throw e }
+  }
+}
+const cpmmPair = every(3000, async () => {
+  const body = await getJson(`https://api.dexscreener.com/latest/dex/pairs/solana/${CPMM}`)
+  return body.pairs?.[0] ?? body.pair ?? null
+})
+
+async function bpUsdNow() {
   try {
     const p = await dexPair(BP)
     if (p?.priceUsd) return Number(p.priceUsd)
@@ -85,6 +138,8 @@ async function bpUsd() {
   const body = await getJson(`https://lite-api.jup.ag/price/v3?ids=${BP}`)
   return body[BP]?.usdPrice ?? null
 }
+
+const bpUsd = every(5000, bpUsdNow)
 
 async function jupiter24h() {
   const [t] = await getJson(`https://lite-api.jup.ag/tokens/v2/search?query=${MINT}`)
@@ -101,8 +156,29 @@ let inflight = null
 let inflightAt = 0
 
 async function quote(apiKey) {
-  const [meta, pair] = await Promise.all([settled(heliusAsset(apiKey)), settled(dexPair(MINT))])
+  const [meta, live, pairNow, bp] = await Promise.all([
+    settled(heliusAsset(apiKey)),
+    settled(cpmm(apiKey)),
+    settled(cpmmPair()),
+    settled(bpUsd()),
+  ])
   const base = meta ?? asset ?? { name: 'Cat in backpack', symbol: 'CIB', image: null }
+  const supply = base.supply ?? 1e9
+
+  if (live && bp) {
+    const price = live.priceInBP * bp
+    return {
+      ...base,
+      source: 'chain',
+      pair: 'CIB / BP',
+      price,
+      marketCap: price * supply,
+      volume24h: pairNow?.volume?.h24 ?? last?.volume24h ?? null,
+      slot: live.slot,
+    }
+  }
+
+  const pair = pairNow ?? (await settled(dexPair(MINT)))
 
   if (pair?.priceUsd) {
     return {
@@ -115,7 +191,7 @@ async function quote(apiKey) {
     }
   }
 
-  const [c, bp, vol] = await Promise.all([settled(curve(apiKey)), settled(bpUsd()), settled(jupiter24h())])
+  const [c, vol] = await Promise.all([settled(curve(apiKey)), settled(jupiter24h())])
   if (c && bp) {
     const price = c.priceInB * bp
     return {
@@ -145,8 +221,8 @@ async function quote(apiKey) {
 export async function loadToken(apiKey) {
   if (!apiKey) throw new Error('HELIUS_API_KEY missing')
 
-  // Many viewers polling at once share one round every 3 s.
-  if (!inflight || Date.now() - inflightAt > 3000) {
+  // Viewers polling at once share one on chain read per 800 ms.
+  if (!inflight || Date.now() - inflightAt > 800) {
     inflightAt = Date.now()
     inflight = quote(apiKey)
   }

@@ -15,22 +15,21 @@ route as the dev middleware.
 
 ## Live on the page
 
-Polled every 8 s from `/api/token`, only while the tab is visible:
+Polled every second from `/api/token` while the tab is visible (edge cached for 1 s, so all
+viewers share one read per second):
 
 | Field | Source |
 | --- | --- |
-| Price USD | DexScreener `priceUsd` of the most liquid CIB pair |
-| Market cap USD | DexScreener `marketCap` of that pair, as served |
-| 24h volume USD | DexScreener `volume.h24` of that pair only |
+| Price USD | Raydium CPMM pool CIB / BP read on chain via Helius, times BP in USD (DexScreener) |
+| Market cap USD | price × total supply, the same basis DexScreener uses |
+| 24h volume USD | DexScreener `volume.h24` of that pool only |
 | Name, symbol, image, supply, decimals | Helius DAS `getAsset` with `showFungible: true` |
-| Pair label | base / quote of the chosen pair (CIB / BP, Backpack) |
+| Pair label | CIB / BP (Backpack) |
 
-Before DexScreener indexes a pair (the LaunchLab curve phase), price comes from the curve
-itself, read on chain through Helius and multiplied by BP in USD; volume is Jupiter's 24h.
-Helius `price_info` is the last resort.
+Fallbacks, in order: DexScreener alone, the LaunchLab curve on chain, Helius `price_info`.
 
-The page shows the time of the last good quote as `live hh:mm:ss`. If quotes fail it keeps the
-last valid figures and the stamp turns to `held`.
+The page shows the time of the last good quote as `live hh:mm:ss`. If quotes fail for 10 s it
+keeps the last valid figures and the stamp turns to `held`.
 
 ## Code
 
